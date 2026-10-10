@@ -1,5 +1,5 @@
 import { all, mutate, rpc, remove } from './client.js';
-import { field, dialog, confirmDialog, notice, today, localTime, esc } from './ui.js';
+import { field, dialog, confirmDialog, notice, today, localTime, esc, afterSave } from './ui.js';
 import { statusOptions } from './permissions.js';
 const options=(rows,label,selected)=>[{value:'',label:'Choose…'},...rows.filter(r=>r.active||r.id===selected).map(r=>({value:r.id,label:r[label]+(r.active?'':' (inactive)')}))];
 const nullable=v=>v===''?null:v;
@@ -24,19 +24,19 @@ export async function orderForm(p,o,onDone) {
  ].join(''),async v=>{
   const data={...v,quantity:Number(v.quantity),gsm:v.gsm===''?null:Number(v.gsm),delivery_date:nullable(v.delivery_date)};
   if(v.status) {data.confirmation_status=v.status;if(o&&v.status!==o.status)data.status_reason=v.status==='Confirmed'?'Confirmed from order form':'Cancelled from order form';}
-  await mutate('orders',data,o?.id,o?.updated_at);await onDone();notice(o?'Order updated.':'Order created.');
+  await mutate('orders',data,o?.id,o?.updated_at);await afterSave(onDone,o?'Order updated.':'Order created.');
  });
 }
 export function changeStatus(p,o,onDone,onlyStatus=null) {
  const opts=onlyStatus?[onlyStatus]:statusOptions(p,o);if(!opts.length)return;
  dialog('Change order status',`<p class="wide">Current stage: <strong>${esc(o.status)}</strong>. Backward moves and skipped stages are allowed within your role. Every change is audited.</p>`+field('status','New status',{required:true,options:opts.map(v=>({value:v,label:v}))})+field('reason','Reason',{required:true,type:'textarea',wide:true}),async v=>{
   if(!v.reason.trim())throw new Error('Enter a reason for this change.');
-  await rpc('set_order_status',{p_id:o.id,p_status:v.status,p_reason:v.reason.trim(),p_expected:o.status});await onDone();notice('Status updated.');
+  await rpc('set_order_status',{p_id:o.id,p_status:v.status,p_reason:v.reason.trim(),p_expected:o.status});await afterSave(onDone,'Status updated.');
  });
 }
 export function acknowledge(o,onDone) {
  dialog('Acknowledge order',`<p class="wide">Acknowledge PO ${esc(o.po_number)} and release it to production. Your identity and the current time will be recorded.</p>`+field('reason','Acknowledgement note',{type:'textarea',value:'Order accepted for production',required:true,wide:true}),async v=>{
-  await rpc('set_order_status',{p_id:o.id,p_status:'Acknowledged',p_reason:v.reason,p_expected:o.status});await onDone();notice('Order acknowledged.');
+  await rpc('set_order_status',{p_id:o.id,p_status:'Acknowledged',p_reason:v.reason,p_expected:o.status});await afterSave(onDone,'Order acknowledged.');
  },{saveLabel:'Acknowledge'});
 }
 export const entryDefs={
@@ -73,9 +73,9 @@ export async function entryForm(table,o,row,onDone) {
   }
   if(table==='inspections'&&Math.round(data.meters_passed*1000)+Math.round(data.meters_rejected*1000)!==Math.round(data.meters_inspected*1000))throw new Error('Passed + rejected meters must equal inspected meters.');
   if(!row)data.order_id=o.id;
-  await mutate(table,data,row?.id,row?.updated_at);await onDone();notice('Entry saved.');
+  await mutate(table,data,row?.id,row?.updated_at);await afterSave(onDone,'Entry saved.');
  });
 }
 export function deleteEntry(table,row,onDone) {
- confirmDialog('Delete entry','This removes the entry from totals. Its original values remain in the audit trail.',async()=>{await remove(table,row.id,row.updated_at);await onDone();notice('Entry deleted and audited.');});
+ confirmDialog('Delete entry','This removes the entry from totals. Its original values remain in the audit trail.',async()=>{await remove(table,row.id,row.updated_at);await afterSave(onDone,'Entry deleted and audited.');});
 }

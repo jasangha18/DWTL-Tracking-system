@@ -49,7 +49,7 @@ async function render() {
   if(p.must_change_password)route='password';
   if(!allowed[route]||!allowed[route].includes(p.role)){notice('Your role cannot open that screen.','error');location.replace(`#${homes[p.role]}`);return;}
   markNavigation();
-  const ctx={p,content,active:()=>token===renderId,reload:async()=>{await render();}};
+  const ctx={p,content,active:()=>token===renderId&&!leaving};
   if(route==='password'){
    content.innerHTML=passwordDialog(p,p.must_change_password);
    bindPassword(async()=>{await identity();notice('Password updated.');location.hash=homes[p.role];});
@@ -65,8 +65,9 @@ $('#menu-toggle').onclick=()=>{const open=$('#sidebar').classList.toggle('open')
 $('#logout').onclick=async e=>{e.currentTarget.disabled=true;await logout();};
 window.addEventListener('hashchange',render);
 window.addEventListener('keydown',e=>{if(e.key==='Escape'){$('#sidebar').classList.remove('open');$('#menu-toggle').setAttribute('aria-expanded','false');}});
-async function refreshIdentity(){if(checking||leaving)return;checking=true;try{if(await identity())await render();}catch(e){notice('Cannot verify the session. Check your connection; data actions remain protected.','error');}finally{checking=false;}}
+async function refreshIdentity(){if(checking||leaving)return;checking=true;try{if(await identity())await render();}catch(e){notice(e.sessionUnavailable?e.message:'Cannot verify the session. Check your connection; data actions remain protected.','error');}finally{checking=false;}}
 window.addEventListener('focus',refreshIdentity);
+window.addEventListener('online',refreshIdentity);
 setInterval(refreshIdentity,30000);
 // Avoid async Supabase calls inside onAuthStateChange (may deadlock the Auth client).
 db.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT'&&!leaving){leaving=true;location.replace('index.html?message=Session%20expired.%20Please%20sign%20in%20again.');}});

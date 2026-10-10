@@ -53,21 +53,70 @@ export function bindFilterBar(form,onChange) {
   toggle.onclick=()=>{panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));};
   panel.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();collapse();toggle.focus();}};
  }
- const changed=()=>{update();onChange();};
+ const values=()=>JSON.stringify(controls.map(el=>el.value));
+ let previous=values();
+ const changed=()=>{
+  update();const current=values();
+  // A text field emits input, then change on blur. Rendering twice can remove
+  // a table action between pointer-down and click. Only react to changed values.
+  if(current!==previous){previous=current;onChange();}
+ };
  form.onsubmit=e=>e.preventDefault();
  form.oninput=changed;form.onchange=changed;
  reset.onclick=()=>{form.reset();changed();};
  update();
  return {update};
 }
+// Replace just a data region, preserving horizontal table scroll and open audit items.
+export function patchRegion(region,html) {
+ const scroll=$$('.table-scroll',region).map(el=>el.scrollLeft);
+ const open=new Set($$('details[open]',region).map(el=>el.dataset.auditId));
+ region.innerHTML=html;
+ $$('.table-scroll',region).forEach((el,i)=>{el.scrollLeft=scroll[i]||0;});
+ $$('details[data-audit-id]',region).forEach(el=>{el.open=open.has(el.dataset.auditId);});
+}
+// A screen supplies its own loader and affected-region renderer. Stale responses
+// cannot overwrite a newer refresh or a different route.
+export function localRefresh(ctx,load,paint,regions=[]) {
+ let sequence=0;
+ return async (...args)=>{
+  if(!ctx.active())return false;
+  const ticket=++sequence;
+  regions.forEach(el=>el?.setAttribute('aria-busy','true'));
+  try {
+   const data=await load(...args);
+   if(!ctx.active()||ticket!==sequence)return false;
+   const position={x:window.scrollX,y:window.scrollY};
+   paint(data,...args);window.scrollTo(position.x,position.y);return true;
+  } finally {
+   if(ticket===sequence)regions.forEach(el=>el?.removeAttribute('aria-busy'));
+  }
+ };
+}
+export function replaceOptions(select,options) {
+ const value=select.value,label=select.selectedOptions[0]?.textContent||value;
+ // Keep a selected filter even when the last matching record was removed.
+ if(value&&!options.some(o=>String(o.value)===value))options=[...options,{value,label}];
+ select.innerHTML=options.map(o=>`<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
+ select.value=value;
+}
+export async function afterSave(refresh,message) {
+ try {await refresh();notice(message);}
+ catch(error){
+  // The write already committed. Close the form rather than inviting a duplicate
+  // submission when only the follow-up read failed.
+  notice(`${message} The displayed records could not be refreshed. Use Refresh to try again; do not submit the entry again. ${error.message}`,'error');
+ }
+}
 // One dialog at a time. Native dialog supplies focus trapping and Escape support.
 export function dialog(title,body,onSave,{saveLabel='Save',destructive=false}={}) {
+ const position={x:window.scrollX,y:window.scrollY},url=location.href;
  const el=$('#dialog');el.innerHTML=`<form id="dialog-form"><header><h2>${esc(title)}</h2><button type="button" class="icon-btn" data-close aria-label="Close dialog">×</button></header><div class="form-grid">${body}</div><p class="form-error" role="alert" hidden></p><footer><button type="button" class="secondary" data-close>Cancel</button><button type="submit" class="${destructive?'danger':''}">${esc(saveLabel)}</button></footer></form>`;
  $$('[data-close]',el).forEach(b=>b.onclick=()=>el.close());
  $('#dialog-form').onsubmit=async e=>{
   e.preventDefault();const form=e.currentTarget;if(!form.reportValidity())return;
   const btn=$('[type=submit]',form),err=$('.form-error',form);btn.disabled=true;btn.textContent='Saving…';err.hidden=true;
-  try {await onSave(Object.fromEntries(new FormData(form)),form);el.close();}
+  try {await onSave(Object.fromEntries(new FormData(form)),form);if(form===el.querySelector('form'))el.close();if(location.href===url)window.scrollTo(position.x,position.y);}
   catch(error){err.textContent=error.message;err.hidden=false;}
   finally {btn.disabled=false;btn.textContent=saveLabel;}
  };el.showModal();

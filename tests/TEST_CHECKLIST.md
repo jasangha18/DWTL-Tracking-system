@@ -109,6 +109,19 @@ Run this on a **staging** Supabase project with the deployed function and your a
 - [ ] Keep the service-role key out of frontend source/network payloads/GitHub. Verify that only the public anon key appears in config.js.
 - [ ] Test a backup restore in a separate project before storing real plant data.
 
+## Session continuity and local updates
+
+- [ ] Stay signed in during normal work and when switching away from the tab and returning. The app has no custom idle sign-out timer; Supabase's configured session limits still apply.
+- [ ] On a test deployment, temporarily interrupt network access during an account check. The current screen/search stays in place and connection feedback appears. Restore access; account checks recover without demanding another sign-in unless the session actually expired or was revoked.
+- [ ] Confirm that revoked/expired sessions and inactive users still lose access; forced password reset still clears the menu and restricts plant data through RLS.
+- [ ] On Dashboard/Orders/Reports, set search, advanced filters and sorting, then create an order matching those filters. The table and summary update, with controls and panel state retained. Local Refresh retains them too.
+- [ ] Search on each work screen and save an issue/receipt/process/inspection/warehouse entry. The first click after searching works; the list updates while search stays selected.
+- [ ] On an order trace, save/edit/delete a permitted entry. Its section, totals/progress and audit update without flashing the whole page or replacing unrelated sections. Page and horizontal table scroll stay in position.
+- [ ] Change an order's fields or status. Updated information, action permissions and status history appear locally; full-trace CSV reflects the updated records.
+- [ ] Search master lists and Users before add/edit/state/role/password actions. The matching records update while searches and master tabs remain in place.
+- [ ] Refresh Login activity after a new event; user/event options and records update without clearing date or user filters.
+- [ ] In a controlled test, allow a save to succeed but fail its follow-up read. The dialog closes and the message says the data was saved. Restore connectivity and click Refresh; the display recovers without inserting the entry a second time.
+
 ## Navigation and browser console
 
 - [ ] On each permitted list page, the matching menu link has its muted highlight. Wait at least 35 seconds; the highlight stays visible.

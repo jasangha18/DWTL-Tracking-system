@@ -1,10 +1,36 @@
 import { db, configured, check, rpc } from './client.js';
-import { $, notice, busy } from './ui.js';
+import { $, notice } from './ui.js';
 export const homes={marketing:'orders',production:'production',inspection:'inspection',warehouse:'warehouse',admin:'dashboard',production_head:'dashboard',viewer:'dashboard'};
-export async function profile() {
- const {data:{session}}=await db.auth.getSession();if(!session)return null;
- const {data:{user},error}=await db.auth.getUser();if(error||!user)return null;
- const rows=check(await db.from('profiles').select('*').eq('id',user.id));return rows[0]||null;
+const endedSessionCodes=new Set(['session_expired','session_not_found','refresh_token_not_found','refresh_token_already_used','user_not_found','user_banned']);
+const endedSession=error=>endedSessionCodes.has(error?.code)||error?.name==='AuthSessionMissingError';
+const invalidAccess=error=>['bad_jwt','no_authorization'].includes(error?.code)||[401,403].includes(error?.status);
+function sessionUnavailable(error) {
+ const result=new Error('Cannot check your session right now. Your sign-in has been kept. Check your connection and try again.',{cause:error});
+ result.sessionUnavailable=true;return result;
+}
+let profileRequest=null;
+// Focus, routing and the account timer may overlap. Share one verification request.
+export function profile() {
+ if(!profileRequest)profileRequest=loadProfile().finally(()=>{profileRequest=null;});
+ return profileRequest;
+}
+async function loadProfile() {
+ const saved=await db.auth.getSession();
+ if(saved.error){if(endedSession(saved.error))return null;throw sessionUnavailable(saved.error);}
+ if(!saved.data?.session)return null;
+ let verified=await db.auth.getUser();
+ if(verified.error){
+  if(endedSession(verified.error))return null;
+  // A JWT may expire while a sleeping tab resumes. Renew once before signing out.
+  if(!invalidAccess(verified.error))throw sessionUnavailable(verified.error);
+  const renewed=await db.auth.refreshSession();
+  if(renewed.error){if(endedSession(renewed.error)||invalidAccess(renewed.error))return null;throw sessionUnavailable(renewed.error);}
+  if(!renewed.data?.session)return null;
+  verified=await db.auth.getUser();
+  if(verified.error){if(endedSession(verified.error)||invalidAccess(verified.error))return null;throw sessionUnavailable(verified.error);}
+ }
+ if(!verified.data?.user)return null;
+ const rows=check(await db.from('profiles').select('*').eq('id',verified.data.user.id));return rows[0]||null;
 }
 export async function logout(message='You have been signed out.') {
  try {await rpc('record_login_event',{p_event:'logout'});} catch { /* inactive/expired sessions cannot write audit */ }
@@ -32,9 +58,14 @@ export function bindPassword(onDone) {
 async function loginPage() {
  if(!configured){$('#login-error').textContent='Setup required: enter your Supabase URL and anon key in config.js.';$('#login-error').hidden=false;$('#login-submit').disabled=true;return;}
  const message=new URLSearchParams(location.search).get('message');if(message)notice(message,'info');
- const current=await profile();
- if(current?.active) {location.replace(`dashboard.html#${current.must_change_password?'password':homes[current.role]}`);return;}
- if(current===null) await db.auth.signOut({scope:'local'});
+ try {
+  const current=await profile();
+  if(current?.active) {location.replace(`dashboard.html#${current.must_change_password?'password':homes[current.role]}`);return;}
+  if(current===null) await db.auth.signOut({scope:'local'});
+ } catch(error) {
+  // A connection failure must not clear the persisted session or disable the form.
+  $('#login-error').textContent=error.message;$('#login-error').hidden=false;
+ }
  $('#login-form').onsubmit=async e=>{
   e.preventDefault();const f=e.currentTarget,err=$('#login-error'),btn=$('#login-submit');err.hidden=true;
   // Local delay improves staff feedback; Supabase's server limits are the enforcement.

@@ -1,5 +1,5 @@
 import { all, db, check, CONFIG } from './client.js';
-import { $, $$, esc, num, stamp, today, badge, table, field, csv, notice, busy } from './ui.js';
+import { $, $$, esc, num, stamp, today, badge, table, csv, notice, busy, filterBar, bindFilterBar } from './ui.js';
 import { STATUSES, canCreate, canEdit, canEntry, canEditEntry, statusOptions, isOpen } from './permissions.js';
 import { orderForm, changeStatus, acknowledge, entryDefs, entryForm, deleteEntry } from './forms.js';
 export function progress(o) {
@@ -11,7 +11,29 @@ export async function orderList(ctx,mode='dashboard') {
  if(!ctx.active())return;
  let filtered=rows;
  const opts=k=>selectOptions([...new Set(rows.map(r=>r[k]))].filter(Boolean).sort());
- ctx.content.innerHTML=`<div class="page-head"><div><h1>${mode==='reports'?'Reports':mode==='orders'?'Orders':'Plant dashboard'}</h1><p>${mode==='reports'?'Filter orders and download a CSV. Open an order to export its full trace.':'Order totals and activity across every department.'}</p></div><div class="actions">${canCreate(ctx.p)?'<button id="new-order">New order</button>':''}<button class="secondary" id="export-orders">Export filtered CSV</button><button class="secondary" id="refresh">Refresh</button></div></div><div id="stats" class="stats"></div><section class="card filters"><h2>Filter orders</h2><form id="filters" class="filter-grid">${field('po','PO search')}${field('status','Status',{options:selectOptions(STATUSES)})}${field('customer_name','Customer',{options:opts('customer_name')})}${field('quality_name','Quality',{options:opts('quality_name')})}${field('shade','Shade',{options:opts('shade')})}${field('grade','Grade',{options:opts('grade')})}${field('from','Order date from',{type:'date'})}${field('to','Order date to',{type:'date'})}${field('sort','Sort by',{value:'last_activity|desc',options:[{value:'last_activity|desc',label:'Last activity · newest'},{value:'order_date|desc',label:'Order date · newest'},{value:'order_date|asc',label:'Order date · oldest'},{value:'delivery_date|asc',label:'Delivery date · earliest'},{value:'po_number|asc',label:'PO number · A to Z'},{value:'quantity|desc',label:'Ordered meters · highest'}]})}${field('inactive','Highlight inactivity after days',{type:'number',value:CONFIG.inactiveDays,min:1,step:1})}<div class="wide actions"><button type="button" id="reset-filters" class="secondary">Reset filters</button><span id="filter-count" class="subtle"></span></div></form></section><section class="card"><div id="orders-table"></div></section>`;
+ const filters=filterBar({
+  id:'filters',resetId:'reset-filters',summaryId:'filter-count',
+  quick:[{name:'po',label:'PO search',type:'search',placeholder:'Search PO number…'}],
+  advanced:[
+   {name:'status',label:'Status',options:selectOptions(STATUSES)},
+   {name:'customer_name',label:'Customer',options:opts('customer_name')},
+   {name:'quality_name',label:'Quality',options:opts('quality_name')},
+   {name:'shade',label:'Shade',options:opts('shade')},
+   {name:'grade',label:'Grade',options:opts('grade')},
+   {name:'from',label:'Order date from',type:'date'},
+   {name:'to',label:'Order date to',type:'date'},
+   {name:'sort',label:'Sort by',value:'last_activity|desc',options:[
+    {value:'last_activity|desc',label:'Last activity · newest'},
+    {value:'order_date|desc',label:'Order date · newest'},
+    {value:'order_date|asc',label:'Order date · oldest'},
+    {value:'delivery_date|asc',label:'Delivery date · earliest'},
+    {value:'po_number|asc',label:'PO number · A to Z'},
+    {value:'quantity|desc',label:'Ordered meters · highest'}
+   ]},
+   {name:'inactive',label:'Inactivity alert (days)',type:'number',value:CONFIG.inactiveDays,min:1,step:1}
+  ]
+ });
+ ctx.content.innerHTML=`<div class="page-head"><div><h1>${mode==='reports'?'Reports':mode==='orders'?'Orders':'Plant dashboard'}</h1><p>${mode==='reports'?'Filter orders and download a CSV. Open an order to export its full trace.':'Order totals and activity across every department.'}</p></div><div class="actions">${canCreate(ctx.p)?'<button id="new-order">New order</button>':''}<button class="secondary" id="export-orders">Export filtered CSV</button><button class="secondary" id="refresh">Refresh</button></div></div><div id="stats" class="stats"></div>${filters}<section class="card"><div id="orders-table"></div></section>`;
  const form=$('#filters');
  function render() {
   const f=Object.fromEntries(new FormData(form));
@@ -30,8 +52,7 @@ export async function orderList(ctx,mode='dashboard') {
    {label:'Last activity',html:r=>stamp(r.last_activity)}
   ],{empty:'No orders match your filters.'});
  }
- form.onsubmit=e=>e.preventDefault();form.oninput=render;form.onchange=render;
- $('#reset-filters').onclick=()=>{form.reset();render();};$('#refresh').onclick=()=>ctx.reload();
+ bindFilterBar(form,render);$('#refresh').onclick=()=>ctx.reload();
  $('#export-orders').onclick=()=>csv('fabric-orders.csv',filtered.map(r=>({po_number:r.po_number,customer:r.customer_name,quality:r.quality_name,shade:r.shade,grade:r.grade,order_date:r.order_date,delivery_date:r.delivery_date,ordered_meters:r.quantity,issued:r.issued,received:r.received,inspected:r.inspected,passed:r.passed,rejected:r.rejected,in_warehouse:r.in_warehouse,balance:r.balance,status:r.status,last_activity:r.last_activity})));
  if($('#new-order'))$('#new-order').onclick=e=>busy(e.currentTarget,()=>orderForm(ctx.p,null,ctx.reload));render();
 }
@@ -67,11 +88,12 @@ export async function workScreen(ctx,mode) {
  const allOrders=await all('order_dashboard'),rows=allOrders.filter(isOpen);
  if(!ctx.active())return;
  const tabs=mode==='production'?['order_issues','order_receipts','process_logs']:mode==='inspection'?['inspections']:['warehouse_receipts'];
- ctx.content.innerHTML=`<div class="page-head"><div><h1>${mode==='production'?'Production':mode==='inspection'?'Inspection':'Warehouse'}</h1><p>Open, acknowledged orders. Use order details to change status, review entries and correct process logs.</p></div><button id="refresh" class="secondary">Refresh</button></div><section class="card">${field('search','Search PO / customer')}<div id="work-table" style="margin-top:18px"></div></section>`;
+ ctx.content.innerHTML=`<div class="page-head"><div><h1>${mode==='production'?'Production':mode==='inspection'?'Inspection':'Warehouse'}</h1><p>Open, acknowledged orders. Use order details to change status, review entries and correct process logs.</p></div><button id="refresh" class="secondary">Refresh</button></div>${filterBar({id:'work-filters',quick:[{name:'search',label:'Search orders',type:'search',placeholder:'Search PO or customer…'}],resetLabel:'Clear search'})}<section class="card"><div id="work-table"></div></section>`;
  function render() {
   const term=$('[name=search]').value.toLowerCase();const list=rows.filter(r=>`${r.po_number} ${r.customer_name}`.toLowerCase().includes(term));
-  $('#work-table').innerHTML=table(list,[{label:'PO',html:r=>`<a href="#order/${r.id}">${esc(r.po_number)}</a>`},{key:'customer_name',label:'Customer'},{key:'quality_name',label:'Quality'},{label:'Stage',html:r=>badge(r.status)},{label:'Ordered / issued / received (m)',html:r=>`${num(r.quantity)} / ${num(r.issued)} / ${num(r.received)}`},{label:'Passed / warehouse (m)',html:r=>`${num(r.passed)} / ${num(r.in_warehouse)}`}],{empty:'No open acknowledged orders. Ask the production head to acknowledge a confirmed order.',actions:r=>tabs.map(t=>`<button data-add="${t}/${r.id}">Add ${esc(entryDefs[t].singular)}</button>`).join('')+`<a class="button secondary" href="#order/${r.id}">Full trace / edit</a>`});
+  $('#work-filters-summary').textContent=`${list.length} of ${rows.length} orders`;
+  $('#work-table').innerHTML=table(list,[{label:'PO',html:r=>`<a href="#order/${r.id}">${esc(r.po_number)}</a>`},{key:'customer_name',label:'Customer'},{key:'quality_name',label:'Quality'},{label:'Stage',html:r=>badge(r.status)},{label:'Ordered / issued / received (m)',html:r=>`${num(r.quantity)} / ${num(r.issued)} / ${num(r.received)}`},{label:'Passed / warehouse (m)',html:r=>`${num(r.passed)} / ${num(r.in_warehouse)}`}],{empty:rows.length?'No orders match your search.':'No open acknowledged orders. Ask the production head to acknowledge a confirmed order.',actions:r=>tabs.map(t=>`<button data-add="${t}/${r.id}">Add ${esc(entryDefs[t].singular)}</button>`).join('')+`<a class="button secondary" href="#order/${r.id}">Full trace / edit</a>`});
   $$('[data-add]').forEach(b=>b.onclick=()=>busy(b,async()=>{const [t,id]=b.dataset.add.split('/');await entryForm(t,rows.find(r=>r.id===id),null,ctx.reload);}));
  }
- $('[name=search]').oninput=render;$('#refresh').onclick=ctx.reload;render();
+ bindFilterBar($('#work-filters'),render);$('#refresh').onclick=ctx.reload;render();
 }

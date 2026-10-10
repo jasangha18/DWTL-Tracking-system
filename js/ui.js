@@ -24,14 +24,41 @@ export function table(rows,columns,{empty='No records yet.',actions=null}={}) {
  return `<div class="table-scroll" tabindex="0" aria-label="Scrollable data table"><table><thead><tr>${columns.map(c=>`<th>${esc(c.label)}</th>`).join('')}${actions?'<th>Actions</th>':''}</tr></thead><tbody>${rows.map(r=>`<tr>${columns.map(c=>`<td>${c.html?c.html(r):esc(r[c.key])}</td>`).join('')}${actions?`<td><div class="actions">${actions(r)}</div></td>`:''}</tr>`).join('')}</tbody></table></div>`;
 }
 let fieldCounter=0;
-export function field(name,label,{type='text',value='',required=false,options=null,min=null,max=null,step=null,help='',wide=false}={}) {
+export function field(name,label,{type='text',value='',required=false,options=null,min=null,max=null,step=null,help='',wide=false,compact=false,placeholder=''}={}) {
  const inputId=`field-${name}-${++fieldCounter}`;
  const attrs=`name="${esc(name)}" id="${esc(inputId)}" ${required?'required':''} ${min!=null?`min="${esc(min)}"`:''} ${max!=null?`max="${esc(max)}"`:''} ${step!=null?`step="${esc(step)}"`:''}`;
  let input;
  if(options) input=`<select ${attrs}>${options.map(o=>`<option value="${esc(o.value)}" ${String(value??'')===String(o.value)?'selected':''}>${esc(o.label)}</option>`).join('')}</select>`;
  else if(type==='textarea')input=`<textarea ${attrs} rows="3">${esc(value)}</textarea>`;
- else input=`<input ${attrs} type="${esc(type)}" value="${esc(value)}" ${type==='password'?'autocomplete="new-password" minlength="8" maxlength="72"':''}>`;
- return `<div class="field ${wide?'wide':''}"><label for="${esc(inputId)}">${esc(label)}${required?' <span aria-label="required">*</span>':' <small>(optional)</small>'}</label>${input}${help?`<small>${esc(help)}</small>`:''}</div>`;
+ else input=`<input ${attrs} type="${esc(type)}" value="${esc(value)}" ${placeholder?`placeholder="${esc(placeholder)}"`:''} ${type==='password'?'autocomplete="new-password" minlength="8" maxlength="72"':''}>`;
+ return `<div class="field ${wide?'wide':''}"><label for="${esc(inputId)}">${esc(label)}${required?' <span aria-label="required">*</span>':compact?'':' <small>(optional)</small>'}</label>${input}${help?`<small>${esc(help)}</small>`:''}</div>`;
+}
+// Shared compact filters: primary controls stay visible; extra controls start collapsed.
+export function filterBar({id,quick=[],advanced=[],resetId=`${id}-reset`,summaryId=`${id}-summary`,resetLabel='Reset filters'}) {
+ const fields=items=>items.map(({name,label,...options})=>field(name,label,{...options,compact:true})).join('');
+ return `<section class="card filters compact-filters"><form id="${esc(id)}" class="compact-filter-form" role="search" aria-label="Filter records"><div class="filter-toolbar"><div class="filter-quick">${fields(quick)}</div><div class="filter-buttons">${advanced.length?`<button type="button" id="${esc(id)}-toggle" class="secondary filter-toggle" aria-expanded="false" aria-controls="${esc(id)}-panel">Filters <span class="filter-active-count" data-filter-active hidden></span><span class="filter-chevron" aria-hidden="true"></span></button>`:''}<button type="button" id="${esc(resetId)}" class="secondary" data-filter-reset>${esc(resetLabel)}</button></div></div>${advanced.length?`<div id="${esc(id)}-panel" class="filter-panel" hidden><div class="filter-grid">${fields(advanced)}</div></div>`:''}<div class="filter-summary"><span id="${esc(summaryId)}" class="subtle" role="status" aria-live="polite"></span></div></form></section>`;
+}
+export function bindFilterBar(form,onChange) {
+ const controls=$$('input[name],select[name]',form);
+ const defaults=Object.fromEntries(controls.map(el=>[el.name,el.tagName==='SELECT'?(Array.from(el.options).find(o=>o.defaultSelected)||el.options[0])?.value||'':el.defaultValue]));
+ const toggle=$('.filter-toggle',form),panel=$('.filter-panel',form),reset=$('[data-filter-reset]',form);
+ const update=()=>{
+  const active=controls.filter(el=>String(el.value).trim()!==String(defaults[el.name]).trim()).length;
+  const counter=$('[data-filter-active]',form);
+  if(counter){counter.textContent=String(active);counter.hidden=active===0;toggle.setAttribute('aria-label',`Filters${active?`, ${active} active`:''}`);}
+  reset.disabled=active===0;
+ };
+ const collapse=()=>{panel.hidden=true;toggle.setAttribute('aria-expanded','false');};
+ if(toggle){
+  toggle.onclick=()=>{panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));};
+  panel.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();collapse();toggle.focus();}};
+ }
+ const changed=()=>{update();onChange();};
+ form.onsubmit=e=>e.preventDefault();
+ form.oninput=changed;form.onchange=changed;
+ reset.onclick=()=>{form.reset();changed();};
+ update();
+ return {update};
 }
 // One dialog at a time. Native dialog supplies focus trapping and Escape support.
 export function dialog(title,body,onSave,{saveLabel='Save',destructive=false}={}) {

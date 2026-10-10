@@ -58,3 +58,11 @@ All ES modules and the bootstrap script passed Node syntax checks. HTML local as
 - Source checks passed. Browser checks passed at 320, 390, 760, 768 and 1280 pixels: both logos load, no horizontal page overflow or header overlap, login error feedback, mobile menu and sidebar positioning.
 - Logo home links checked for all seven roles; forced password change remains enforced. No browser JavaScript errors. These checks used a mocked Supabase API and made no live database changes.
 - Normal-text contrast ratios checked for primary buttons, active navigation and links: 5.65:1, 6.86:1 and 6.89:1.
+
+## Compact search and filter controls — 2026-10-10
+
+- Dashboard, Orders and Reports keep PO search visible and start with advanced filters collapsed. The Filters button shows the active count; closing preserves values and Escape closes the panel with focus returned to the button.
+- Production, Inspection, Warehouse, all three master lists and Users use compact search bars with clear controls and result counts. Login activity keeps its user dropdown visible and collapses event/date filters.
+- Browser checks passed for all 11 list screens at 320, 390, 768 and 1280 pixels: compact height, search/clear, combined filters, retained values, sorting, date-range feedback, filtered CSV downloads and no horizontal page overflow. No browser JavaScript errors.
+- All 34 existing browser regression checks passed against the changed sources, including entry forms, order creation, process edit/delete, status changes, master/user management, role routing and forced password change.
+- Source checks passed with `node scripts/check.mjs`. Browser checks used mocked Supabase responses; no live database changes were made. No SQL or Edge Function changes are required for this update.

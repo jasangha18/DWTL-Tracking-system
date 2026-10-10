@@ -1,1 +1,38 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Sign in · Fabric Tracking</title><link rel="stylesheet" href="css/app.css"><script src="https://cdn.tailwindcss.com/3.4.17"></script><script>tailwind.config={corePlugins:{preflight:false}};</script></head><body data-page="login"><div id="notice" class="notice" role="status" hidden></div><main class="login-wrap"><section class="card auth-card"><div class="brand-mark" aria-hidden="true">FT</div><h1>Fabric Order & Tracking</h1><p>Sign in with the username given to you by your plant administrator.</p><form id="login-form"><label for="username">Username</label><input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required maxlength="32"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required><p id="login-error" class="form-error" role="alert" hidden></p><button id="login-submit" type="submit">Sign in</button></form><p class="subtle">Forgot your password? Contact your plant administrator for a temporary password.</p></section></main><script type="module" src="js/auth.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f1ce52">
+  <title>Sign in · David Whitehead Textiles</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>tailwind.config={corePlugins:{preflight:false}};</script>
+</head>
+<body data-page="login">
+  <div id="notice" class="notice" role="status" hidden></div>
+  <main class="login-wrap">
+    <section class="card auth-card sign-in-card" aria-labelledby="sign-in-title">
+      <div class="auth-brand">
+        <img class="login-logo" src="assets/company-logo.png"
+             alt="David Whitehead Textiles" width="818" height="375" fetchpriority="high">
+        <p class="auth-system">Fabric Order &amp; Tracking</p>
+        <h1 id="sign-in-title">Sign in</h1>
+        <p>Use the username given to you by your plant administrator.</p>
+      </div>
+      <form id="login-form">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" autocapitalize="none"
+               spellcheck="false" required maxlength="32">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <p id="login-error" class="form-error" role="alert" hidden></p>
+        <button id="login-submit" type="submit">Sign in</button>
+      </form>
+      <p class="subtle auth-help">Forgot your password? Contact your plant administrator for a temporary password.</p>
+    </section>
+  </main>
+  <script type="module" src="js/auth.js"></script>
+</body>
+</html>

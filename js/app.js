@@ -9,7 +9,7 @@ const content=$('#content');
 const links=[['dashboard','Dashboard'],['orders','Orders'],['production','Production'],['inspection','Inspection'],['warehouse','Warehouse'],['masters/fabrics','Master data'],['users','Users'],['activity','Login activity'],['reports','Reports'],['password','Change my password']];
 function nav() {
  $('#plant-name').textContent=CONFIG.plantName;
- $('#plant-name').href=`#${homes[p.role]}`;
+ $('#brand-home').href=`#${homes[p.role]}`;
  $('#user-info').textContent=`${p.full_name} · ${roleName(p.role)}`;
  $('#nav').innerHTML=p.must_change_password?'':links.filter(([route])=>allowed[route.split('/')[0]].includes(p.role)).map(([route,label])=>`<a href="#${route}">${esc(label)}</a>`).join('');
 }

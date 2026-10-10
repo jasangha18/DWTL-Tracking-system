@@ -50,3 +50,11 @@ This is not a `deno check` or hosted Edge runtime test. The actual function stil
 ## Source checks
 
 All ES modules and the bootstrap script passed Node syntax checks. HTML local asset references resolve. Required tables, RLS enablement, the security-invoker dashboard view and public configuration were checked. Run `node scripts/check.mjs` (no dependencies) from this folder to repeat these checks.
+
+## David Whitehead Textiles branding — 2026-10-10
+
+- Original supplied PNG retained byte-for-byte in `assets/company-logo.png`; large sign-in logo and compact app header logo.
+- Gold/charcoal/white branding with light backgrounds, muted gold navigation and buttons, and distinct status colours.
+- Source checks passed. Browser checks passed at 320, 390, 760, 768 and 1280 pixels: both logos load, no horizontal page overflow or header overlap, login error feedback, mobile menu and sidebar positioning.
+- Logo home links checked for all seven roles; forced password change remains enforced. No browser JavaScript errors. These checks used a mocked Supabase API and made no live database changes.
+- Normal-text contrast ratios checked for primary buttons, active navigation and links: 5.65:1, 6.86:1 and 6.89:1.

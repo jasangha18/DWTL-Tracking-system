@@ -18,6 +18,7 @@ A static, responsive plant application with Supabase Auth, PostgreSQL RLS, immut
   .assetsignore                    Excludes setup files from Worker asset uploads
   .nojekyll
   package.json                     Optional local source checks; no build script
+  assets/company-logo.png          Supplied David Whitehead Textiles logo
   css/app.css
   js/client.js                     Supabase access, pagination and error handling
   js/auth.js                       Login, logout and password changes

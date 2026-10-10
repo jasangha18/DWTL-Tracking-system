@@ -4,14 +4,31 @@ import { $, $$, esc, roleName, notice } from './ui.js';
 import { allowed } from './permissions.js';
 import { orderList, orderDetail, workScreen } from './orders.js';
 import { masters, users, activity } from './admin.js';
-let p=null,renderId=0,checking=false,leaving=false;
+let p=null,renderId=0,checking=false,leaving=false,navKey=null;
 const content=$('#content');
 const links=[['dashboard','Dashboard'],['orders','Orders'],['production','Production'],['inspection','Inspection'],['warehouse','Warehouse'],['masters/fabrics','Master data'],['users','Users'],['activity','Login activity'],['reports','Reports'],['password','Change my password']];
+function markNavigation() {
+ let route=p.must_change_password?'password':(location.hash.slice(1)||homes[p.role]).split('/')[0];
+ // Order details belong to Orders, or the staff member's work screen.
+ if(route==='order')route=allowed.orders.includes(p.role)?'orders':homes[p.role];
+ $$('a',$('#nav')).forEach(a=>{
+  const current=a.hash.slice(1).split('/')[0]===route;
+  a.classList.toggle('active',current);
+  if(current)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');
+ });
+}
 function nav() {
  $('#plant-name').textContent=CONFIG.plantName;
  $('#brand-home').href=`#${homes[p.role]}`;
  $('#user-info').textContent=`${p.full_name} · ${roleName(p.role)}`;
- $('#nav').innerHTML=p.must_change_password?'':links.filter(([route])=>allowed[route.split('/')[0]].includes(p.role)).map(([route,label])=>`<a href="#${route}">${esc(label)}</a>`).join('');
+ // Identity checks run on focus and every 30 seconds. Keep unchanged links
+ // in place so those checks preserve the current highlight and keyboard focus.
+ const key=`${p.role}:${!!p.must_change_password}`;
+ if(key!==navKey){
+  $('#nav').innerHTML=p.must_change_password?'':links.filter(([route])=>allowed[route.split('/')[0]].includes(p.role)).map(([route,label])=>`<a href="#${route}">${esc(label)}</a>`).join('');
+  navKey=key;
+ }
+ markNavigation();
 }
 async function identity() {
  if(leaving)return false;
@@ -31,7 +48,7 @@ async function render() {
   let path=location.hash.slice(1)||homes[p.role], [route,arg]=path.split('/');
   if(p.must_change_password)route='password';
   if(!allowed[route]||!allowed[route].includes(p.role)){notice('Your role cannot open that screen.','error');location.replace(`#${homes[p.role]}`);return;}
-  $$('a',$('#nav')).forEach(a=>a.classList.toggle('active',a.hash.slice(1).split('/')[0]===route));
+  markNavigation();
   const ctx={p,content,active:()=>token===renderId,reload:async()=>{await render();}};
   if(route==='password'){
    content.innerHTML=passwordDialog(p,p.must_change_password);

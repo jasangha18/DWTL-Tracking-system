@@ -66,3 +66,11 @@ All ES modules and the bootstrap script passed Node syntax checks. HTML local as
 - Browser checks passed for all 11 list screens at 320, 390, 768 and 1280 pixels: compact height, search/clear, combined filters, retained values, sorting, date-range feedback, filtered CSV downloads and no horizontal page overflow. No browser JavaScript errors.
 - All 34 existing browser regression checks passed against the changed sources, including entry forms, order creation, process edit/delete, status changes, master/user management, role routing and forced password change.
 - Source checks passed with `node scripts/check.mjs`. Browser checks used mocked Supabase responses; no live database changes were made. No SQL or Edge Function changes are required for this update.
+
+## Persistent navigation highlight and console investigation — 2026-10-10
+
+- Reproduced the reported bug: one active navigation link before a focus-triggered identity check, zero afterwards. The account check rebuilt every menu link without restoring the active state.
+- Menu links now rebuild only when role/password-state permissions change. Active styling and `aria-current` follow the current route, including order-detail parent screens. Unchanged account checks preserve the existing links and keyboard focus.
+- Browser checks passed for 13 admin routes (including all master tabs and order details), focus events and repeated 30-second identity callbacks. Six staff roles passed mobile navigation and order-detail parent highlighting. Live role changes remove admin routes and redirect to the permitted home; live temporary-password resets clear navigation and force the password screen.
+- Tested with the actual pinned Tailwind 3.4.17 CDN script and the supplied Cloudflare CSP, with mocked Supabase responses: zero application errors, CSP violations or font requests. Tailwind's own development-CDN advisory remains. The reported font and message-channel errors were not reproduced in this clean browser; they appear to come from an extension or another injected resource. The app's CSP was not widened to allow unknown font sources.
+- All 34 existing browser regression checks and `node scripts/check.mjs` passed. No live Supabase data was changed, and no SQL or Edge Function changes are required.

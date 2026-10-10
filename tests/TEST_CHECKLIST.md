@@ -109,6 +109,14 @@ Run this on a **staging** Supabase project with the deployed function and your a
 - [ ] Keep the service-role key out of frontend source/network payloads/GitHub. Verify that only the public anon key appears in config.js.
 - [ ] Test a backup restore in a separate project before storing real plant data.
 
+## Navigation and browser console
+
+- [ ] On each permitted list page, the matching menu link has its muted highlight. Wait at least 35 seconds; the highlight stays visible.
+- [ ] Switch to another browser tab/window and return; the selected link and keyboard focus remain unchanged. Mobile menu navigation still closes after choosing a page.
+- [ ] Open an order trace: Orders stays highlighted for admin/marketing/head; other roles retain their home/work section as the parent highlight.
+- [ ] Change a staff role from a separate admin session; on the next account check, the staff menu and permitted home update. Reset the staff password and confirm the menu is cleared until the new password is set.
+- [ ] Check the site with extensions disabled: no font requests, CSP font violations or message-channel errors should come from the app. The Tailwind Play CDN development advisory is expected with this no-build CDN configuration.
+
 ## Direct RLS checks from the browser console
 
 On your staging deployment, you can import the same public client and attempt unauthorized operations using the current staff session. Replace only the order ID. Never use a service key for permission tests.

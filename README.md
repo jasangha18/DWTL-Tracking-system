@@ -171,7 +171,7 @@ git init
 git add .
 git commit -m "Initial fabric order tracking system"
 git branch -M main
-git remote add origin https://github.com/jasangha18/DWTL-Tracking-system.git
+git remote add origin https://github.com/dwtdhruvp246/DWTL-Tracking-system.git
 git push -u origin main
 ```
 
@@ -246,6 +246,9 @@ Status does not automatically move when an entry is saved. Use Change status, wi
 
 ## Recovery and troubleshooting
 
+- **Selected menu highlight:** it follows the current screen and remains visible through the 30-second account checks and window focus checks. Order details highlight Orders for roles with order-list access, or the staff role's home/work screen otherwise.
+- **Yellow Tailwind CDN notice:** the requested no-build CDN setup uses [Tailwind's Play CDN](https://v3.tailwindcss.com/docs/installation/play-cdn), which warns that it is intended for development. This advisory is separate from application errors. Removing it requires replacing the runtime CDN with pre-generated static CSS; do not suppress console warnings globally.
+- **Blocked fonts or asynchronous message-channel errors:** the app uses system fonts, has no remote font files and uses no browser-extension messaging APIs. Test in a browser profile with extensions disabled (or an Incognito window without enabled extensions). In a clean browser, the real Tailwind runtime and supplied CSP produced no font requests, CSP violations or application errors. If a blocked font remains, expand its console entry to identify the requesting URL before changing the CSP. Keep the policy restricted to resources the app actually needs.
 - **Login fails:** check username spelling, active state and that the admin created a synthetic Auth identity. The login page always displays Username, not email. Ask an admin for a reset; no email recovery exists.
 - **"Database error saving new user":** all SQL files 01–03 must be installed and the Admin API must supply the trusted metadata. Do not use the Dashboard's generic Add User/Invite form; it will not set the provisioning metadata.
 - **Users function fails:** check function name, gateway JWT verification setting, CORS origin secret, caller role, password-change flag and function logs. Never replace the frontend anon key with a service secret.

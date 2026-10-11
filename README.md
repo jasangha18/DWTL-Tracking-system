@@ -112,7 +112,9 @@ Now run **`sql/04_seed.sql`** if you want the five sample fabrics, eight process
 
 The full Deno/TypeScript function is `supabase/functions/admin-users/index.ts`. It checks the supplied bearer token using `auth.getUser(token)`, then reads the caller's **current** profile: active admin with a completed password change is required. It handles create, reset password, role change and activate/deactivate. User-provided metadata can never grant a role.
 
-`ALLOWED_ORIGINS` is a comma-separated list of exact approved frontend origins, without trailing slashes. For local development and your real site, use e.g. `http://localhost:8080,https://fabric-orders.pages.dev,https://orders.example.com`. Include actual preview URLs only if you intend to allow administrators to use them. There is no wildcard default. CORS is additional browser protection; bearer authentication and live profile checks are the actual access controls.
+By default, the function accepts browser requests from any origin, without cookies or credentialed CORS. Each action still requires a verified bearer JWT and a current, active admin profile with a completed password change. This lets Cloudflare Pages previews, a new Pages account and a future custom domain work without repeatedly editing a domain secret. The public anon key cannot authorize user management.
+
+Optional domain restriction: set `ENFORCE_ALLOWED_ORIGINS=true` and `ALLOWED_ORIGINS` to a comma-separated list of exact origins, e.g. `http://localhost:8080,https://fabric-orders.pages.dev,https://orders.example.com`. Trailing slashes are normalized; paths and wildcard patterns are not supported. Existing `ALLOWED_ORIGINS` secrets are ignored unless restriction is explicitly enabled. Even restricted requests receive CORS error headers so the frontend can explain the denial. This optional check does not replace JWT or live-role checks.
 
 ### Supabase CLI deployment
 
@@ -121,7 +123,6 @@ Install the current Supabase CLI using the official supported installation metho
 ```bash
 supabase login
 supabase link --project-ref YOUR_PROJECT_REF
-supabase secrets set ALLOWED_ORIGINS='http://localhost:8080,https://YOUR_SITE.pages.dev'
 supabase functions deploy admin-users --no-verify-jwt
 ```
 
@@ -132,8 +133,8 @@ supabase functions deploy admin-users --no-verify-jwt
 1. Open Edge Functions in your project and choose the dashboard editor/create function option.
 2. Name it **`admin-users`** and paste all of `supabase/functions/admin-users/index.ts` into `index.ts`.
 3. Deploy the function. In its function settings, turn OFF the gateway option called **Verify JWT / Enforce JWT verification** (the exact label can vary). Leave the function's own `getUser` verification intact.
-4. In Edge Function Secrets, add `ALLOWED_ORIGINS` with your exact approved origins. Redeploy if prompted.
-5. After configuring the frontend, log in as the first admin and create a test viewer from Users. If it fails, inspect the function logs without copying secrets or passwords into them.
+4. No origin secret is required for the default setup. If you previously set `ENFORCE_ALLOWED_ORIGINS=true`, remove it or set it to `false` unless you deliberately want domain restrictions.
+5. After configuring the frontend, log in as the first admin. In Users, click **Check connection**; it verifies the deployed function version and active-admin access without changing any data. Then create a test viewer. If it fails, inspect the function logs without copying secrets or passwords into them.
 
 References: [Function configuration](https://supabase.com/docs/guides/functions/function-configuration), [function authentication](https://supabase.com/docs/guides/functions/auth), [Auth Admin API](https://supabase.com/docs/reference/javascript/auth-admin-createuser).
 
@@ -171,7 +172,7 @@ git init
 git add .
 git commit -m "Initial fabric order tracking system"
 git branch -M main
-git remote add origin https://github.com/dwtdhruvp246/DWTL-Tracking-system.git
+git remote add origin https://github.com/jasangha18/DWTL-Tracking-system.git
 git push -u origin main
 ```
 
@@ -188,7 +189,7 @@ In Cloudflare Dashboard → Workers & Pages → create a Pages project → conne
 | Root directory | Leave empty if these files are at repo root |
 | Frontend environment variables | None |
 
-Deploy. Add the actual Cloudflare/custom domain to `ALLOWED_ORIGINS`. If Cloudflare initially generates a different domain, update the secret; admins cannot call the function from unlisted origins. `_headers` supplies security and caching headers on Pages. For a custom Supabase API domain, update the `connect-src` directive in `_headers` as well as `config.js`.
+Deploy. The default function CORS setup supports the actual Cloudflare/custom domain automatically. If you opted into domain restrictions, add the actual origin to `ALLOWED_ORIGINS`. `_headers` supplies security and caching headers on Pages. For a custom Supabase API domain, update the `connect-src` directive in `_headers` as well as `config.js`.
 
 This application uses hash routing, so no server rewrite or `_redirects` file is necessary. Git pushes update the site without a build. Supabase SQL changes and Edge Function deployments are separate operations.
 
@@ -198,7 +199,7 @@ This happens when a **Workers** deployment uploads the repository root and inclu
 
 The root `.assetsignore` also excludes dependency folders, server/setup files, tests and documentation from Worker static-asset uploads if you use that deployment route. It preserves `index.html`, `dashboard.html`, `config.js`, `js/`, `css/` and `_headers`. This addresses the oversized-tool upload; the deployed site and Supabase function still need their separate setup and acceptance checks.
 
-After a successful deployment, use the actual HTTPS website origin (without a path or trailing slash) for Supabase's Site URL and the `admin-users` function's `ALLOWED_ORIGINS`. A custom domain is optional: Cloudflare supplies a `pages.dev` address.
+After a successful deployment, use the actual HTTPS website origin (without a path or trailing slash) for Supabase's Site URL. Update `ALLOWED_ORIGINS` only if optional domain restrictions are enabled. A custom domain is optional: Cloudflare supplies a `pages.dev` address.
 
 
 ## How permissions and flexible flow work
@@ -255,7 +256,7 @@ Status does not automatically move when an entry is saved. Use Change status, wi
 - **Blocked fonts or asynchronous message-channel errors:** the app uses system fonts, has no remote font files and uses no browser-extension messaging APIs. Test in a browser profile with extensions disabled (or an Incognito window without enabled extensions). In a clean browser, the real Tailwind runtime and supplied CSP produced no font requests, CSP violations or application errors. If a blocked font remains, expand its console entry to identify the requesting URL before changing the CSP. Keep the policy restricted to resources the app actually needs.
 - **Login fails:** check username spelling, active state and that the admin created a synthetic Auth identity. The login page always displays Username, not email. Ask an admin for a reset; no email recovery exists.
 - **"Database error saving new user":** all SQL files 01–03 must be installed and the Admin API must supply the trusted metadata. Do not use the Dashboard's generic Add User/Invite form; it will not set the provisioning metadata.
-- **Users function fails:** check function name, gateway JWT verification setting, CORS origin secret, caller role, password-change flag and function logs. Never replace the frontend anon key with a service secret.
+- **Users function fails:** click **Check connection** on Users. The updated handler reports version `2026-10-11-cors`. If the browser cannot reach it or the deployed version is older, replace/deploy `supabase/functions/admin-users/index.ts` in the **same project as config.js**. A GitHub/Cloudflare deployment does not redeploy Supabase functions. Keep gateway JWT verification off and the handler JWT/live-admin checks intact. If domain restrictions were deliberately enabled, check their exact origin list. Never replace the frontend anon key with a service secret.
 - **Only login works:** change the temporary password. A new password matching the temporary one is intentionally rejected, even if Auth rehashes it.
 - **No production orders:** confirmation does not equal acknowledgement. The production head must acknowledge the order. Completed/Cancelled/Rejected orders must be reopened by the head/admin for new entries.
 - **RLS error:** verify current live profile role and state. A hidden UI action is not authorization. Do not disable RLS to fix it.
@@ -279,3 +280,16 @@ Status does not automatically move when an entry is saved. Use Change status, wi
 - CAPTCHA integration, MFA and current-password reauthentication for admin-sensitive actions, with a recovery procedure compatible with synthetic usernames.
 - Large-data server pagination, export snapshots, realtime updates and notification rules.
 - Self-hosted frontend dependencies, accessibility audit on actual factory devices, automated live-project staging tests and scheduled backup/restore drills.
+
+## Repair an existing user-management deployment (2026-10-11)
+
+A rejected `OPTIONS` preflight previously hid the handler response behind a generic fetch error. The revised handler answers preflight first and supplies CORS headers on every response. By default, changing the Pages domain no longer breaks authenticated admin actions. The frontend now displays handler/gateway messages, uses the current session JWT explicitly and renews a token near expiry before sending a write. It never retries a write automatically after an ambiguous network failure; refresh the user list before retrying.
+
+For this configured project, update your local files from GitHub, then run:
+
+```bash
+supabase login
+supabase functions deploy admin-users --project-ref ztzmodmerqmgpvwandkz --no-verify-jwt
+```
+
+Alternatively, use the Supabase dashboard editor to replace `admin-users/index.ts` with the current repository file and click Deploy. Keep gateway Verify JWT off: the handler itself verifies the token and current admin permissions. No SQL, account recreation or service key in the frontend is needed. After Cloudflare publishes the frontend commit, reload the app and click Users → Check connection, then create your test staff account.

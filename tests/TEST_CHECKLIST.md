@@ -5,7 +5,7 @@ Run this on a **staging** Supabase project with the deployed function and your a
 ## Setup and accounts
 
 - [ ] SQL 01, 02 and 03 run successfully in order; public tables have RLS enabled; `private` is not exposed by the Data API.
-- [ ] Public signup, anonymous login and unused providers are disabled. Password minimum is at least 8. The deployed `admin-users` function has its handler JWT check intact and `ALLOWED_ORIGINS` correctly set.
+- [ ] Public signup, anonymous login and unused providers are disabled. Password minimum is at least 8. The deployed `admin-users` function has its handler JWT check intact and default bearer-authenticated CORS working (or the exact origins configured if optional restrictions are enabled).
 - [ ] Bootstrap `plant.admin`, sign in with its temporary password, and confirm only the forced password screen and Logout are accessible.
 - [ ] Try `dashboard.html#dashboard`, `#users`, `#orders` and a known `#order/UUID` before changing the password: all stay on forced password change.
 - [ ] A 7-character password and mismatched repeats are rejected. A password over 72 UTF-8 bytes is rejected with a clear message. A new password equal to the temporary one is rejected even after Auth has rehashed it.
@@ -94,7 +94,7 @@ Run this on a **staging** Supabase project with the deployed function and your a
 - [ ] Admin resets `viewer.one` to a temporary password. The viewer's already open session immediately loses data access on its next request, and is forced to change password on refresh/focus or the next 30-second identity check.
 - [ ] Change `production.one` to viewer while its session is open: direct production inserts fail without needing token refresh. UI routes change on focus/identity check.
 - [ ] Deactivate `warehouse.one` while signed in elsewhere: reads return no business rows, writes fail immediately and future sign-ins are banned. Reactivate, sign in again and verify restored permissions.
-- [ ] Admin cannot deactivate or demote itself. Non-admin callers, inactive admins, forced-password admins, missing/invalid JWTs and unapproved origins cannot call `admin-users`.
+- [ ] Admin cannot deactivate or demote itself. Non-admin callers, inactive admins, forced-password admins, missing/invalid JWTs cannot call `admin-users`. With optional origin restrictions enabled, unlisted and missing origins are also denied.
 - [ ] No app user, including admin, can directly alter/delete status_history, change_audit or login_audit, promote itself via profiles, forge acknowledgement actor/time or change created_by/created_at.
 - [ ] Direct URL `#users` and `#activity` is blocked for every non-admin. `#masters` is blocked except admin/head. `#production`, `#inspection`, `#warehouse` each allow only their documented roles.
 
@@ -149,3 +149,12 @@ await db.from('status_history').update({ reason: 'tampered' }).eq('order_id', ta
 ```
 
 An RLS-blocked **UPDATE/DELETE** may return success with **zero rows** rather than an exception. Verify both the returned rows and unchanged data. Inserts usually return a permission/constraint error. After deactivation or forced password reset, **SELECT** can return an empty array by design. These are enforcement outcomes, not missing frontend data bugs.
+
+## User-management CORS repair
+
+- [ ] Deploy the current `admin-users` handler separately from Cloudflare. Users → Check connection confirms version `2026-10-11-cors` and active-admin access. This action creates no account.
+- [ ] In the default configuration, admin create/reset/role/activation work from your Pages production URL, preview URL and future custom domain. No service key is present in browser requests.
+- [ ] Missing/invalid JWT, non-admin, inactive admin and temporary-password admin requests remain rejected, including requests from other origins.
+- [ ] If optional `ENFORCE_ALLOWED_ORIGINS=true` is used, an unlisted origin receives a readable denial and no user is created. An approved origin with a trailing slash in its configured secret works.
+- [ ] A missing function, gateway Invalid JWT, handler validation error and temporary network failure show distinct useful messages. Network failure never retries an admin write automatically; refresh Users before retrying.
+- [ ] Expired/near-expiry JWT renews before an admin write. Failed renewal sends no user-management request and retains the form.

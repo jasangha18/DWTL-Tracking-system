@@ -3,15 +3,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 const roles = ['admin','marketing','production_head','production','inspection','warehouse','viewer'];
 const url = Deno.env.get('SUPABASE_URL')!;
 const service = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false, autoRefreshToken: false } });
-const origins = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map(s=>s.trim()).filter(Boolean);
+const version = '2026-10-11-cors';
+// Bearer authentication is the access control. Cookie-based authentication and credentialed CORS are not used.
+// Domain restrictions are optional: a changed Pages URL must not break user management.
+const restrictOrigins = Deno.env.get('ENFORCE_ALLOWED_ORIGINS') === 'true';
+const origins = (Deno.env.get('ALLOWED_ORIGINS') || '').split(',').map(s=>s.trim().replace(/\/+$/,'')).filter(Boolean);
 Deno.serve(async req => {
  const origin = req.headers.get('Origin') || '';
- const cors: Record<string,string> = { 'Vary':'Origin','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS' };
- if (origins.includes(origin)) cors['Access-Control-Allow-Origin']=origin;
+ const cors: Record<string,string> = {
+  'Access-Control-Allow-Origin':'*',
+  'Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-retry-count, traceparent, tracestate, baggage',
+  'Access-Control-Allow-Methods':'POST, OPTIONS',
+  'Access-Control-Max-Age':'300',
+  'X-Admin-Users-Version':version
+ };
  const reply = (status:number,body:unknown) => new Response(JSON.stringify(body),{status,headers:{...cors,'Content-Type':'application/json','Cache-Control':'no-store'}});
- if (origin && !origins.includes(origin)) return reply(403,{error:'Origin not allowed'});
+ // Answer preflight before authentication or optional origin checks. Returning CORS
+ // headers on errors lets the UI display the actual reason instead of "Failed to fetch".
  if (req.method==='OPTIONS') return new Response(null,{status:204,headers:cors});
  if (req.method!=='POST') return reply(405,{error:'Use POST'});
+ if (restrictOrigins && (!origin || !origins.includes(origin))) return reply(403,{error:'This website is not in ALLOWED_ORIGINS. Add its exact origin or set ENFORCE_ALLOWED_ORIGINS=false.'});
  try {
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i,'');
   if (!token) return reply(401,{error:'Sign in first'});
@@ -22,6 +33,9 @@ Deno.serve(async req => {
   // Bound request size; passwords are never logged or returned.
   const raw=await req.text(); if(raw.length>12000) return reply(413,{error:'Request too large'});
   const b=JSON.parse(raw);
+  if(!b || typeof b!=='object' || Array.isArray(b)) return reply(400,{error:'Send a JSON object'});
+  // Read-only deployment check. It uses the SAME active-admin authorization as writes.
+  if(b.action==='status') return reply(200,{ok:true,version,restricted_origins:restrictOrigins});
   const fail=(e:{message:string}|null)=>{if(e) throw new Error(e.message);};
   const log=async(event:string,target:string,details:unknown={})=>{
    const {error}=await service.from('login_audit').insert({user_id:target,created_by:caller.id,event,details:{actor:caller.id,...details as object}}); fail(error);

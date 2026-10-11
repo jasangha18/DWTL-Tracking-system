@@ -34,6 +34,12 @@ export async function users(ctx) {
   $$('[data-active]').forEach(b=>b.onclick=()=>{const r=rows.find(r=>r.id===b.dataset.active);confirmDialog(`${r.active?'Deactivate':'Activate'} ${r.username}`,r.active?'Data access is revoked immediately and future sign-ins are blocked.':'This user will be allowed to sign in again.',async()=>{await adminAction({action:'set_active',user_id:r.id,active:!r.active});await afterSave(ctx.reload,'Account updated.');});});
  }
  $('#create-user').onclick=()=>dialog('Create plant user',field('username','Username',{required:true,help:'3–32 lowercase letters, digits, dots, underscores or hyphens.'})+field('full_name','Full name',{required:true})+field('role','Role',{required:true,value:'viewer',options:roleOptions})+field('real_email','Real email',{type:'email'})+field('password','Temporary password',{type:'password',required:true,help:'Minimum 8 characters. Share privately; no invitation email is sent.'}),async v=>{await adminAction({action:'create',...v});await afterSave(ctx.reload,'User created. Share their username and temporary password privately.');});
+ const connection=document.createElement('button');connection.className='secondary';connection.id='check-users-connection';connection.textContent='Check connection';$('#refresh').before(connection);
+ connection.onclick=e=>busy(e.currentTarget,async()=>{
+  const result=await adminAction({action:'status'});
+  if(result.version!=='2026-10-11-cors') throw new Error('An older admin-users function is deployed. Replace it with the current repository file and deploy again.');
+  notice('User management is connected. Your active-admin permissions were verified.');
+ });
  bindFilterBar($('#user-filters'),render);
  ctx.reload=localRefresh(ctx,()=>all('profiles',{order:'username',ascending:true}),next=>{rows=next;render();},[$('#user-table')]);
  $('#refresh').onclick=e=>busy(e.currentTarget,()=>ctx.reload());render();

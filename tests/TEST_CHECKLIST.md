@@ -158,3 +158,16 @@ An RLS-blocked **UPDATE/DELETE** may return success with **zero rows** rather th
 - [ ] If optional `ENFORCE_ALLOWED_ORIGINS=true` is used, an unlisted origin receives a readable denial and no user is created. An approved origin with a trailing slash in its configured secret works.
 - [ ] A missing function, gateway Invalid JWT, handler validation error and temporary network failure show distinct useful messages. Network failure never retries an admin write automatically; refresh Users before retrying.
 - [ ] Expired/near-expiry JWT renews before an admin write. Failed renewal sends no user-management request and retains the form.
+
+## Named order audit
+
+- [ ] Existing installation: run SQL 06 once. Open a saved order: audit summaries display action, full name/username and date/time with seconds and the displayed timezone. No need to expand an event to see who performed it.
+- [ ] Create an issue, receipt, process pass, inspection and warehouse receipt under their respective roles. Each entry shows Recorded by / Recorded at; the audit's actor matches the staff member who saved it.
+- [ ] Edit a process under another authorized production user. The audit shows the editor, and its comparison includes only changed fields; the entry's Recorded by remains its original creator.
+- [ ] Delete a process pass. The deletion audit names the deleting user and retains the original machine, meters and remarks.
+- [ ] Verify customer/fabric/process reference values display names in field comparisons. Expand Original audit record to inspect unchanged raw data.
+- [ ] Status history and acknowledgement show names. Full trace CSV includes original UUIDs and human-readable actor columns.
+- [ ] Keep an audit event open, then save another entry. Only related regions refresh and the expanded event stays open.
+- [ ] Deactivate an actor: active users still see that person's historical name. The inactive user cannot execute the name lookup or read orders.
+- [ ] Viewer can resolve only actors on an existing order, receives only id/username/full_name and cannot read other users' private profiles. Anonymous and forced-password callers cannot read the lookup.
+- [ ] At 320px and desktop widths, names/long remarks wrap, timestamps are readable and the field table scrolls without page overflow. Usernames, names and remarks containing HTML display as text.

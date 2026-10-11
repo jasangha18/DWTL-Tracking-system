@@ -1,0 +1,17 @@
+// Node 20+, no packages or live services. Exercises the actual safe audit renderer.
+import assert from 'node:assert/strict';
+import { auditChanges, auditValue, personName, auditTime, changeAudit } from '../js/audit.js';
+let count=0;const pass=label=>{count++;console.log('PASS',label);};
+const people={alice:{id:'alice',username:'alice.prod',full_name:'Alice Production'},bob:{id:'bob',username:'bob.head',full_name:'Bob Head'}};
+const changed={id:'change-1',table_name:'process_logs',action:'UPDATE',created_by:'bob',created_at:'2026-10-11T16:33:09Z',old_data:{id:'log-1',order_id:'order-1',created_by:'alice',created_at:'2026-10-10T10:00:00Z',updated_at:'2026-10-10T10:00:00Z',meters_out:980,remarks:'First pass'},new_data:{id:'log-1',order_id:'order-1',created_by:'alice',created_at:'2026-10-10T10:00:00Z',updated_at:'2026-10-11T16:33:09Z',meters_out:970,remarks:'Corrected loss'}};
+assert.equal(personName('alice',people),'Alice Production (@alice.prod)');assert.equal(personName(null,people),'System / setup');assert.equal(personName('missing',people),'Staff member (missing)');pass('named staff, system and unknown actor remain distinct');
+assert.deepEqual(auditChanges(changed).map(r=>r.key),['meters_out','remarks']);assert.equal(auditChanges(changed)[0].before,980);assert.equal(auditChanges(changed)[0].after,970);pass('edits show business differences, not metadata timestamps or the original creator');
+assert.equal(auditChanges({action:'UPDATE',old_data:{remarks:null},new_data:{}}).length,0);assert.equal(auditChanges({action:'UPDATE',old_data:{meters_out:0},new_data:{meters_out:null}}).length,1);pass('null/absent values agree but zero is a meaningful value');
+assert.equal(auditValue('process_id','p',people,{process_id:{p:'Dyeing'}}),'Dyeing');assert.equal(auditValue('acknowledged_by','bob',people),'Bob Head (@bob.head)');assert(auditValue('entry_date','2026-10-11').includes('11 Oct 2026'));pass('reference labels, actor references and calendar dates are readable');
+assert(auditTime('2026-10-11T16:33:09Z').includes(':09'));assert(auditTime('2026-10-11T16:33:09Z').includes('2026'));assert.equal(auditTime('invalid'),'invalid');pass('timestamps retain seconds and timezone; invalid fallback is safe');
+const removed={...changed,id:'delete-1',action:'DELETE',created_at:'2026-10-12T16:33:09Z',new_data:null};const html=changeAudit([changed,removed],people);
+assert(html.includes('Deleted process pass'));assert(html.includes('Bob Head (@bob.head)'));assert(html.indexOf('delete-1')<html.indexOf('change-1'));assert(html.includes('Before'));assert(html.includes('After'));assert(html.includes('Original audit record'));assert(auditChanges(removed).some(r=>r.key==='meters_out'&&r.before===980&&r.after===null));pass('deletion preserves original values, action actor, newest-first order and original raw record');
+const hostile=changeAudit([{...changed,old_data:{remarks:'<script>alert(1)</script>'},new_data:{remarks:'<img src=x onerror=alert(1)>'}}],{bob:{full_name:'<svg onload=alert(1)>',username:'bad<name'}});
+assert(!hostile.includes('<script>'));assert(!hostile.includes('<img'));assert(!hostile.includes('<svg'));assert(hostile.includes('&lt;img'));pass('identity, changed text and raw JSON cannot inject HTML');
+assert(changeAudit([],people).includes('No changes yet.'));assert(auditChanges({...changed,old_data:{quantity:100},new_data:{quantity:100,updated_at:'later'}}).length===0);pass('empty audit and metadata-only changes have clear states');
+console.log(`AUDIT: ${count} checks passed.`);

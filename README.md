@@ -26,6 +26,7 @@ A static, responsive plant application with Supabase Auth, PostgreSQL RLS, immut
   js/permissions.js                UI capabilities (RLS is authoritative)
   js/forms.js                      Orders, status and operational entry forms
   js/orders.js                     Dashboard, order trace and work screens
+  js/audit.js                      Named actors and readable change comparisons
   js/admin.js                      Masters, users and login activity
   js/app.js                        Role routing and session guard
   sql/01_schema.sql
@@ -33,11 +34,13 @@ A static, responsive plant application with Supabase Auth, PostgreSQL RLS, immut
   sql/03_views_triggers.sql
   sql/04_seed.sql
   sql/05_auth_provisioning_fix.sql
+  sql/06_order_actor_names.sql      Existing-install audit name lookup
   supabase/config.toml
   supabase/functions/admin-users/index.ts
   scripts/bootstrap-admin.mjs
   scripts/check.mjs
   tests/database.mjs
+  tests/audit.mjs                   Audit rendering checks (no dependencies)
   tests/TEST_CHECKLIST.md
   VERIFICATION.md
 ```
@@ -293,3 +296,17 @@ supabase functions deploy admin-users --project-ref ztzmodmerqmgpvwandkz --no-ve
 ```
 
 Alternatively, use the Supabase dashboard editor to replace `admin-users/index.ts` with the current repository file and click Deploy. Keep gateway Verify JWT off: the handler itself verifies the token and current admin permissions. No SQL, account recreation or service key in the frontend is needed. After Cloudflare publishes the frontend commit, reload the app and click Users → Check connection, then create your test staff account.
+
+## Readable order audit (2026-10-11)
+
+On an existing installation, run `sql/06_order_actor_names.sql` once in the Supabase SQL editor, then refresh the app. It is safe to repeat. Fresh installations have the same function included in SQL 03; there is no need to replay the schema or replace any tables. No Edge Function redeployment is required for this change.
+
+Change audit rows show Created/Updated/Deleted, a business record label, the action performer's full name and username, and an exact timestamp including seconds and timezone. Newest actions appear first. Expand a row to compare its changed business fields; metadata-only timestamp updates are excluded from the comparison. Deleted records retain their original values. Original stored JSON remains available under Original audit record. Expanded audit rows stay open through local entry refreshes.
+
+Order information, acknowledgement/status history and operational entry tables also resolve the recorded staff identities. Entries distinguish the staff-entered production/inspection date from the actual Recorded at timestamp. Full trace CSV keeps original IDs/audit data and adds named actor columns.
+
+`get_order_actor_names(order_id)` returns only ID, username and full name for staff linked to that order. It requires the same active, password-changed role gate as order reads; anonymous execution is denied. It does not broaden profiles RLS or expose email, account state or password fields. Inactive former staff still have names on historical events, while inactive callers cannot read the lookup. Names use the current profile name/username; actor IDs and immutable audit timestamps remain the historical source of truth. Times use the browser's configured timezone, explicitly shown in the audit section.
+
+If the frontend is published before SQL 06, the order stays usable. An admin sees a database-update notice, unresolved users retain their recorded ID, and Refresh resolves names after the SQL is applied.
+
+Run `node tests/audit.mjs` for the dependency-free renderer checks. `tests/database.mjs` includes lookup permissions, minimal-column exposure and migration-repeat checks in addition to the existing database/RLS suite.

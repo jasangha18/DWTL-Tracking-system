@@ -14,6 +14,9 @@ const test=(label)=>{passed++;console.log('PASS',label);};
 await db.exec(await readFile('sql/05_auth_provisioning_fix.sql','utf8'));
 await db.exec(await readFile('sql/05_auth_provisioning_fix.sql','utf8'));
 test('auth provisioning repair can be applied repeatedly');
+await db.exec(await readFile('sql/06_order_actor_names.sql','utf8'));
+await db.exec(await readFile('sql/06_order_actor_names.sql','utf8'));
+test('order actor migration can be applied repeatedly');
 const ids={};for(const role of ['admin','marketing','production_head','production','inspection','warehouse','viewer']){
  await db.exec('begin');
  const [u]=await query(`insert into auth.users(encrypted_password,raw_app_meta_data) values(extensions.crypt('Temporary123!',extensions.gen_salt('bf')), '{"provider":"email","providers":["email"]}') returning id`);
@@ -40,6 +43,7 @@ async function as(role){await db.exec('reset role');await query("select set_conf
 async function owner(){await db.exec('reset role');await query("select set_config('request.jwt.claim.sub','',false)");}
 async function denied(sql,params=[]){try{await query(sql,params);throw new Error('UNEXPECTED ALLOW: '+sql);}catch(e){if(e.message.startsWith('UNEXPECTED'))throw e;return;}}
 await as('viewer');assert.equal((await query('select * from public.orders')).length,0);test('temporary password cannot read orders');
+await owner();const [demo]=await query("select id from public.orders where po_number='DEMO-001'");await as('viewer');assert.equal((await query('select * from public.get_order_actor_names($1)',[demo.id])).length,0);test('temporary-password user cannot resolve order actor names');
 await denied('select public.complete_password_change(null)');test('null password cannot bypass forced change');
 await denied('select public.complete_password_change($1)',['Temporary123!']);test('cannot clear forced password flag without a distinct password');
 await owner();for(const id of Object.values(ids))await query("update auth.users set encrypted_password=extensions.crypt('NewPassword123!',extensions.gen_salt('bf')) where id=$1",[id]);
@@ -78,6 +82,9 @@ await query("select public.set_order_status($1,'Completed','Delivery complete','
 await denied('insert into public.warehouse_receipts(order_id,meters,location) values($1,1,\'Rack C\')',[o.id]);test('warehouse can complete with skips; closed orders block operational entries');
 await as('admin');await query("select public.set_order_status($1,'In Production','Reopen for correction','Completed')",[o.id]);
 await denied("select public.set_order_status($1,'Completed','Stale update','Completed')",[o.id]);test('admin can reopen; stale status update denied');
+for(const role of Object.keys(ids)){await as(role);const actors=await query('select * from public.get_order_actor_names($1)',[o.id]);assert.deepEqual(actors.map(a=>a.username).sort(),['admin','marketing','production_head','production','inspection','warehouse'].sort());assert.deepEqual(Object.keys(actors[0]).sort(),['id','username','full_name'].sort());assert.equal((await query('select * from public.get_order_actor_names($1)',[crypto.randomUUID()])).length,0);}
+test('all active roles resolve only related actors and three safe columns; unknown orders return no identities');
+await as('viewer');assert.equal((await query('select * from public.profiles')).length,1);assert.deepEqual((await query('select * from public.get_order_actor_names($1)',[demo.id])).map(a=>a.username),['admin']);test('order lookup does not open profile RLS or expose unrelated staff');await as('admin');
 await denied("update public.status_history set reason='Tampered' where order_id=$1",[o.id]);test('status history append-only even for admin browser');
 await as('production');await denied("insert into public.order_issues(order_id,meters) values($1,'NaN')",[o.id]);test('NaN meters rejected');
 await denied('insert into public.order_issues(order_id,meters) values($1,0)',[o.id]);test('zero meters rejected at database boundary');
@@ -87,7 +94,7 @@ await owner();await query("update public.profiles set role='marketing' where id=
 await as('viewer');assert.equal((await query('update public.orders set quantity=101 where id=$1 returning id',[second.id])).length,0);test('another marketing user cannot edit a draft they do not own');
 await owner();await query("update public.profiles set role='viewer' where id=$1",[ids.viewer]);
 await owner();await query("select public.admin_profile_action($1,$2,null,false)",[ids.admin,ids.production]);
-await as('production');assert.equal((await query('select * from public.orders')).length,0);await denied('insert into public.order_receipts(order_id,meters) values($1,1)',[o.id]);test('deactivation immediately blocks existing JWT identity');
+await as('production');assert.equal((await query('select * from public.orders')).length,0);await denied('insert into public.order_receipts(order_id,meters) values($1,1)',[o.id]);test('deactivation immediately blocks existing JWT identity');assert.equal((await query('select * from public.get_order_actor_names($1)',[o.id])).length,0);test('inactive session cannot resolve staff names');
 await owner();await query("select public.admin_profile_action($1,$2,'viewer',null)",[ids.admin,ids.marketing]);
 await as('marketing');assert.equal((await query('select public.get_my_role() role'))[0].role,'viewer');test('role changes take effect with old session');
 await owner();await db.exec('begin');
@@ -95,11 +102,11 @@ await query("update auth.users set encrypted_password=extensions.crypt('ResetTem
 await query("update auth.users set raw_app_meta_data=raw_app_meta_data||jsonb_build_object('temporary_nonce','reset-1') where id=$1",[ids.viewer]);
 assert.equal((await query('select must_change_password from public.profiles where id=$1',[ids.viewer]))[0].must_change_password,true);
 await db.exec('commit');
-await as('viewer');assert.equal((await query('select * from public.order_dashboard')).length,0);test('admin reset atomically locks data access');
+await as('viewer');assert.equal((await query('select * from public.order_dashboard')).length,0);test('admin reset atomically locks data access');assert.equal((await query('select * from public.get_order_actor_names($1)',[o.id])).length,0);test('temporary reset also blocks staff lookup under an existing session');
 await owner();await query("update auth.users set encrypted_password=extensions.crypt('ResetTemp123!',extensions.gen_salt('bf')) where id=$1",[ids.viewer]);
 await as('viewer');await denied('select public.complete_password_change($1)',['ResetTemp123!']);test('rehashing same temporary password cannot bypass forced change');
 await owner();await query("update auth.users set encrypted_password=extensions.crypt('DistinctNew123!',extensions.gen_salt('bf')) where id=$1",[ids.viewer]);
-await as('viewer');await query('select public.complete_password_change($1)',['DistinctNew123!']);assert.equal((await query('select * from public.orders')).length,5);test('reset user resumes only with distinct new password');
-await as(null);await denied('select * from public.orders');await denied('select public.get_my_role()');test('anonymous table and RPC access blocked');
+await as('viewer');await query('select public.complete_password_change($1)',['DistinctNew123!']);assert.equal((await query('select * from public.orders')).length,5);assert((await query('select * from public.get_order_actor_names($1)',[o.id])).some(p=>p.id===ids.production));test('reset user resumes only with distinct new password; inactive actors retain historical names');
+await as(null);await denied('select * from public.orders');await denied('select public.get_my_role()');await denied('select * from public.get_order_actor_names($1)',[o.id]);test('anonymous table and RPC access blocked');
 await owner();await denied("select public.admin_profile_action($1,$1,null,false)",[ids.admin]);test('admin cannot deactivate self');
 console.log(`DATABASE: ${passed} checks passed`);await db.close();
